@@ -701,7 +701,7 @@ function InventoryDashboard({ onSignOut }) {
         <div className="flex items-center gap-3 bg-[#261a45] px-5 py-5 text-white">
           <span className="text-3xl text-[#e5c18b]">♢</span>
           <div className="font-serif text-xl leading-tight">
-            Jewellery
+            ARJ
             <div>Inventory</div>
           </div>
         </div>
@@ -2408,7 +2408,7 @@ function App() {
           <div className="mb-7 text-center">
             <div className="mb-3 text-5xl text-[#6944cf]">♢</div>
             <h1 className="text-2xl font-bold text-[#261a45]">
-              Jewellery Inventory
+              ARJ Inventory
             </h1>
             <p className="mt-2 text-sm text-[#817b8c]">
               Sign in to manage your inventory
