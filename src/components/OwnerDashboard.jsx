@@ -100,6 +100,25 @@ export default function OwnerDashboard({ onSignOut }) {
   const [productSearch, setProductSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [loadingProducts, setLoadingProducts] = useState(false);
+
+  const loadProfitLossReport = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc("get_profit_loss_report", {
+        p_start_date: reportStartDate,
+        p_end_date: reportEndDate,
+      });
+
+      if (error) throw error;
+
+      setReportData(data?.[0] || null);
+    } catch (error) {
+      console.error("Unable to load Profit & Loss report:", error);
+      setReportError(error.message);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [reportStartDate, reportEndDate]);
+
   useEffect(() => {
     loadDashboardStats();
   }, []);
@@ -123,7 +142,11 @@ export default function OwnerDashboard({ onSignOut }) {
       loadExpenses();
     }
     if (activeTab === "Reports") {
-      loadProfitLossReport();
+      const reportLoadTimeout = setTimeout(() => {
+        loadProfitLossReport();
+      }, 0);
+
+      return () => clearTimeout(reportLoadTimeout);
     }
   }, [activeTab, reportStartDate, reportEndDate, loadProfitLossReport]);
 
@@ -774,7 +797,14 @@ export default function OwnerDashboard({ onSignOut }) {
             {menuItems.map((item) => (
               <button
                 key={item.name}
-                onClick={() => setActiveTab(item.name)}
+                onClick={() => {
+                  if (item.name === "Reports" && activeTab !== "Reports") {
+                    setReportLoading(true);
+                    setReportError("");
+                  }
+
+                  setActiveTab(item.name);
+                }}
                 className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition ${
                   activeTab === item.name
                     ? "bg-[#7049d8] text-white"
@@ -1963,7 +1993,11 @@ export default function OwnerDashboard({ onSignOut }) {
                       type="date"
                       value={reportStartDate}
                       max={reportEndDate}
-                      onChange={(e) => setReportStartDate(e.target.value)}
+                      onChange={(event) => {
+                        setReportLoading(true);
+                        setReportError("");
+                        setReportStartDate(event.target.value);
+                      }}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2"
                     />
                   </div>
@@ -1977,7 +2011,11 @@ export default function OwnerDashboard({ onSignOut }) {
                       value={reportEndDate}
                       min={reportStartDate}
                       max={todayInIndia}
-                      onChange={(e) => setReportEndDate(e.target.value)}
+                      onChange={(event) => {
+                        setReportLoading(true);
+                        setReportError("");
+                        setReportEndDate(event.target.value);
+                      }}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2"
                     />
                   </div>
