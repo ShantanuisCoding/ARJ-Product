@@ -512,27 +512,6 @@ export default function OwnerDashboard({ onSignOut }) {
       setLoadingExpenses(false);
     }
   }
-  // LOAD PROFIT & LOSS REPORT
-  const loadProfitLossReport = useCallback(async () => {
-    setReportLoading(true);
-    setReportError("");
-
-    try {
-      const { data, error } = await supabase.rpc("get_profit_loss_report", {
-        p_start_date: reportStartDate,
-        p_end_date: reportEndDate,
-      });
-
-      if (error) throw error;
-
-      setReportData(data?.[0] || null);
-    } catch (error) {
-      console.error("Unable to load Profit & Loss report:", error);
-      setReportError(error.message);
-    } finally {
-      setReportLoading(false);
-    }
-  }, [reportStartDate, reportEndDate]);
 
   // SAVE OR UPDATE EXPENSE
   async function handleSaveExpense(e) {
