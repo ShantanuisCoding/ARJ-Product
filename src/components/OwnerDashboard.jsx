@@ -100,7 +100,8 @@ export default function OwnerDashboard({ onSignOut }) {
   const [productSearch, setProductSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [loadingProducts, setLoadingProducts] = useState(false);
-
+  const [exportingInventory, setExportingInventory] = useState(false);
+  const [exportError, setExportError] = useState("");
   const loadProfitLossReport = useCallback(async () => {
     try {
       const { data, error } = await supabase.rpc("get_profit_loss_report", {
@@ -188,6 +189,163 @@ export default function OwnerDashboard({ onSignOut }) {
       console.error("Unable to load products:", error.message);
     } finally {
       setLoadingProducts(false);
+    }
+  }
+
+  async function handleDownloadInventory() {
+    setExportingInventory(true);
+    setExportError("");
+
+    try {
+      async function fetchAllRows(table, columns) {
+        const pageSize = 1000;
+        const rows = [];
+
+        for (let from = 0; ; from += pageSize) {
+          const { data, error } = await supabase
+            .from(table)
+            .select(columns)
+            .order("id", { ascending: true })
+            .range(from, from + pageSize - 1);
+
+          if (error) throw error;
+
+          rows.push(...(data ?? []));
+          if (!data || data.length < pageSize) break;
+        }
+
+        return rows;
+      }
+
+      const [categories, products, transactions] = await Promise.all([
+        fetchAllRows("categories", "id, name"),
+        fetchAllRows(
+          "products",
+          "id, category_id, sku, name, variant, stock_quantity, minimum_stock, active, categories(name)",
+        ),
+        fetchAllRows(
+          "stock_transactions",
+          "id, product_id, transaction_type, quantity",
+        ),
+      ]);
+
+      const totalsByProduct = new Map();
+
+      for (const transaction of transactions) {
+        const totals = totalsByProduct.get(transaction.product_id) ?? {
+          purchase: 0,
+          sale: 0,
+          adjustment_in: 0,
+          adjustment_out: 0,
+        };
+
+        if (
+          Object.prototype.hasOwnProperty.call(
+            totals,
+            transaction.transaction_type,
+          )
+        ) {
+          totals[transaction.transaction_type] += Number(
+            transaction.quantity || 0,
+          );
+        }
+
+        totalsByProduct.set(transaction.product_id, totals);
+      }
+
+      const rows = products.map((product) => {
+        const totals = totalsByProduct.get(product.id) ?? {
+          purchase: 0,
+          sale: 0,
+          adjustment_in: 0,
+          adjustment_out: 0,
+        };
+
+        return {
+          Category: product.categories?.name ?? "Uncategorized",
+          SKU: product.sku ?? "",
+          Product: product.name,
+          Variant: product.variant ?? "",
+          Status: product.active ? "Active" : "Inactive",
+          "Remaining Stock": Number(product.stock_quantity ?? 0),
+          "Purchased Qty": totals.purchase,
+          "Sold Qty": totals.sale,
+          "Adjustment In Qty": totals.adjustment_in,
+          "Adjustment Out Qty": totals.adjustment_out,
+          "Minimum Stock": Number(product.minimum_stock ?? 0),
+        };
+      });
+
+      const categoriesWithProducts = new Set(
+        products.map((product) => product.category_id),
+      );
+
+      for (const category of categories) {
+        if (!categoriesWithProducts.has(category.id)) {
+          rows.push({
+            Category: category.name,
+            SKU: "",
+            Product: "",
+            Variant: "",
+            Status: "",
+            "Remaining Stock": 0,
+            "Purchased Qty": 0,
+            "Sold Qty": 0,
+            "Adjustment In Qty": 0,
+            "Adjustment Out Qty": 0,
+            "Minimum Stock": 0,
+          });
+        }
+      }
+
+      if (rows.length === 0) {
+        setExportError("There are no categories or products to export.");
+        return;
+      }
+
+      rows.sort(
+        (a, b) =>
+          a.Category.localeCompare(b.Category) ||
+          a.Product.localeCompare(b.Product),
+      );
+
+      const headers = Object.keys(rows[0]);
+
+      function csvCell(value) {
+        let text = String(value ?? "");
+
+        if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) {
+          text = "'" + text;
+        }
+
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+
+      const csv = [
+        headers.map(csvCell).join(","),
+        ...rows.map((row) =>
+          headers.map((header) => csvCell(row[header])).join(","),
+        ),
+      ].join("\r\n");
+
+      const blob = new Blob(["\uFEFF" + csv], {
+        type: "text/csv;charset=utf-8;",
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `inventory-summary-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      link.click();
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error("Unable to export inventory:", error);
+      setExportError(error.message || "Unable to export inventory.");
+    } finally {
+      setExportingInventory(false);
     }
   }
 
@@ -1002,9 +1160,26 @@ export default function OwnerDashboard({ onSignOut }) {
                   >
                     + Add Product
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadInventory}
+                    disabled={exportingInventory}
+                    className="rounded-xl border border-purple-200 px-4 py-3 text-sm font-semibold text-purple-700 disabled:opacity-50"
+                  >
+                    {exportingInventory
+                      ? "Preparing CSV..."
+                      : "Download Categories & Products"}
+                  </button>
                 </div>
               </div>
-
+              {exportError && (
+                <p
+                  role="alert"
+                  className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+                >
+                  {exportError}
+                </p>
+              )}
               {productMessage && (
                 <p
                   role="status"
