@@ -125,13 +125,14 @@ export default function OwnerDashboard({ onSignOut }) {
   }, []);
   useEffect(() => {
     if (
-      activeTab === "Inventory" ||
-      activeTab === "Categories" ||
-      activeTab === "Purchases" ||
-      activeTab === "Sales"
-    ) {
-      loadProducts();
-    }
+  activeTab === "Overview" ||
+  activeTab === "Inventory" ||
+  activeTab === "Categories" ||
+  activeTab === "Purchases" ||
+  activeTab === "Sales"
+) {
+  loadProducts();
+}
 
     if (activeTab === "Purchases") {
       loadPurchaseHistory();
